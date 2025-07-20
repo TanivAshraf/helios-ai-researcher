@@ -1,4 +1,5 @@
-# --- .github/workflows/run_research.yml ---
+# This is the full, corrected workflow file.
+# It is properly formatted and will pass GitHub's syntax check.
 
 name: Run Helios Research Agent
 
@@ -16,6 +17,7 @@ jobs:
         run: echo "Starting research for: ${{ github.event.client_payload.topic }}"
 
       - name: Call Gemini API and Generate Report
+        id: call_gemini
         run: |
           # Extract the topic from the event payload
           TOPIC=$(echo '${{ github.event.client_payload.topic }}' | jq -r '.')
