@@ -1,10 +1,8 @@
-# This is the full, corrected workflow file.
-# It is properly formatted and will pass GitHub's syntax check.
+# --- .github/workflows/run_research.yml (FINAL ROBUST VERSION) ---
 
 name: Run Helios Research Agent
 
 on:
-  # This allows an external service (like our CodePen) to trigger this workflow
   repository_dispatch:
     types: [run-helios-research]
 
@@ -12,20 +10,26 @@ jobs:
   research:
     runs-on: ubuntu-latest
     steps:
+      # Step 1: We must check out the repository to access the prompt.txt file
+      - name: Checkout Repository Code
+        uses: actions/checkout@v4
+
       - name: Researching Topic Provided by User
-        # The client_payload contains the data sent from our CodePen
         run: echo "Starting research for: ${{ github.event.client_payload.topic }}"
 
       - name: Call Gemini API and Generate Report
         id: call_gemini
         run: |
-          # Extract the topic from the event payload
-          TOPIC=$(echo '${{ github.event.client_payload.topic }}' | jq -r '.')
-
-          # Prepare the detailed prompt for the AI
-          PROMPT="You are an expert research analyst. Create a comprehensive, well-structured research report on the topic: \"$TOPIC\". Follow this exact process: 1. Plan: Internally decompose the topic into 5 key sub-questions. 2. Search & Summarize: Internally search for information on each sub-question. 3. Synthesize Report: Weave all information into a single, coherent report with an Introduction, a section for each key question, and a Conclusion. The final output should ONLY be the report text."
+          # Read the prompt template from the file
+          PROMPT_TEMPLATE=$(cat .github/prompt.txt)
           
-          # Use jq to safely create the JSON payload
+          # Get the user's topic
+          TOPIC="${{ github.event.client_payload.topic }}"
+          
+          # Replace the placeholder in the prompt with the actual topic
+          PROMPT="${PROMPT_TEMPLATE//'{TOPIC}'/$TOPIC}"
+          
+          # Prepare the JSON payload using jq
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" \
             '{contents: [{parts: [{text: $prompt}]}]}')
           
