@@ -5,9 +5,14 @@
 # Exit immediately if any command fails
 set -e
 
+# --- ROBUSTNESS FIX ---
+# Use a variable to find the directory where this script is located.
+# This makes the file paths more reliable.
+SCRIPT_DIR=$(dirname "$0")
+
 # The topic is passed as the first argument from the workflow
 TOPIC="$1"
-PROMPT_FILE=".github/prompt.txt"
+PROMPT_FILE="$SCRIPT_DIR/prompt.txt" # Use the SCRIPT_DIR variable
 
 echo "--- Starting research for topic: $TOPIC ---"
 
@@ -28,12 +33,11 @@ JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" \
 echo "--- Calling Gemini API ---"
 
 # Call the API using the secret key, which is passed as an environment variable
-# The 's' flag makes curl silent, 'X POST' specifies the method
 API_RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}" \
   -H "Content-Type: application/json" \
   -d "$JSON_PAYLOAD")
 
-# Extract the report text using jq. The '-r' flag gives raw text without quotes.
+# Extract the report text using jq.
 REPORT_TEXT=$(echo "$API_RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
 
 # A crucial check: If the API response was an error, the text will be "null" or empty
