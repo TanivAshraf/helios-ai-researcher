@@ -10,38 +10,16 @@ jobs:
   research:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: We must check out the repository to access the prompt.txt file
+      # We must check out the repository to get access to our script files
       - name: Checkout Repository Code
         uses: actions/checkout@v4
 
-      - name: Researching Topic Provided by User
-        run: echo "Starting research for: ${{ github.event.client_payload.topic }}"
-
-      - name: Call Gemini API and Generate Report
-        id: call_gemini
-        run: |
-          # Read the prompt template from the file
-          PROMPT_TEMPLATE=$(cat .github/prompt.txt)
-          
-          # Get the user's topic
-          TOPIC="${{ github.event.client_payload.topic }}"
-          
-          # Replace the placeholder in the prompt with the actual topic
-          PROMPT="${PROMPT_TEMPLATE//'{TOPIC}'/$TOPIC}"
-          
-          # Prepare the JSON payload using jq
-          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" \
-            '{contents: [{parts: [{text: $prompt}]}]}')
-          
-          # Call the Gemini API using the secret key
-          API_RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d "$JSON_PAYLOAD")
-            
-          # Extract just the text part of the response
-          REPORT_TEXT=$(echo "$API_RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
-          
-          # Print the final report to the logs for the user to see
-          echo "--- GENERATED REPORT START ---"
-          echo "$REPORT_TEXT"
-          echo "--- GENERATED REPORT END ---"
+      - name: Run Research Script
+        # Securely pass the secret API key to the script's environment
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        # This simple, single line executes our script.
+        # 'bash' tells the runner to use the bash interpreter.
+        # The second part is the path to the script.
+        # The third part is the topic data, passed as an argument.
+        run: bash .github/entrypoint.sh "${{ github.event.client_payload.topic }}"
