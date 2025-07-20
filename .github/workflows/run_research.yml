@@ -1,4 +1,4 @@
-# --- .github/workflows/run_research.yml (FINAL ROBUST VERSION) ---
+# --- .github/workflows/run_research.yml (FINAL VERSION with Report Commit) ---
 
 name: Run Helios Research Agent
 
@@ -9,20 +9,62 @@ on:
 jobs:
   research:
     runs-on: ubuntu-latest
+    # Grant permissions for the job to write back to the repository
+    permissions:
+      contents: 'write'
+
     steps:
-      # We must check out the repository to get access to our script files
       - name: Checkout Repository Code
+        # We need the code to access the prompt file
         uses: actions/checkout@v4
 
-      # --- NEW STEP ADDED HERE ---
-      # This step gives our script the necessary permissions to run.
-      - name: Make script executable
-        run: chmod +x .github/entrypoint.sh
+      - name: Call Gemini API and Generate Report
+        id: call_gemini
+        run: |
+          # Read the prompt template from the file
+          PROMPT_TEMPLATE=$(cat .github/prompt.txt)
+          
+          # Get the user's topic from the trigger payload
+          TOPIC="${{ github.event.client_payload.topic }}"
+          
+          # Replace the placeholder in the prompt with the actual topic
+          PROMPT="${PROMPT_TEMPLATE//'{TOPIC}'/$TOPIC}"
+          
+          # Prepare the JSON payload for the API
+          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" \
+            '{contents: [{parts: [{text: $prompt}]}]}')
+          
+          # Call the Gemini API using the secret key
+          API_RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD")
+            
+          # Extract just the text part of the response
+          REPORT_TEXT=$(echo "$API_RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+          
+          # A crucial check to ensure the report is not empty
+          if [ -z "$REPORT_TEXT" ] || [ "$REPORT_TEXT" == "null" ]; then
+            echo "Error: Failed to extract a valid report from the API response."
+            exit 1
+          fi
+          
+          # --- NEW PART ---
+          # Save the report to a file named latest_report.md
+          # The filename is set as an output so the next step can use it
+          echo "$REPORT_TEXT" > latest_report.md
+          echo "report_filename=latest_report.md" >> $GITHUB_OUTPUT
 
-      - name: Run Research Script
-        # Securely pass the secret API key to the script's environment
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        # This simple, single line executes our script.
-        # It passes the topic data as a command-line argument.
-        run: .github/entrypoint.sh "${{ github.event.client_payload.topic }}"
+      - name: Commit and Push Report
+        run: |
+          # Configure git with the bot's identity
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # Add the new report file to the staging area
+          git add ${{ steps.call_gemini.outputs.report_filename }}
+          
+          # Commit the file with a descriptive message
+          git commit -m "docs: generate new research report"
+          
+          # Push the commit to the main branch
+          git push
