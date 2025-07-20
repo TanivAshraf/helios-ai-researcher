@@ -1,37 +1,41 @@
-name: Run Helios AI Research Agent
+# --- .github/workflows/run_research.yml ---
+
+name: Run Helios Research Agent
 
 on:
-  # This makes the "Run workflow" button appear on the Actions tab
-  workflow_dispatch:
-    inputs:
-      topic:
-        description: 'The research topic for the AI to analyze'
-        required: true
-        default: 'The impact of quantum computing on modern cryptography'
+  # This allows an external service (like our CodePen) to trigger this workflow
+  repository_dispatch:
+    types: [run-helios-research]
 
 jobs:
   research:
     runs-on: ubuntu-latest
     steps:
-      - name: Researching topic
-        run: echo "Starting research for: ${{ github.event.inputs.topic }}"
+      - name: Researching Topic Provided by User
+        # The client_payload contains the data sent from our CodePen
+        run: echo "Starting research for: ${{ github.event.client_payload.topic }}"
 
       - name: Call Gemini API and Generate Report
-        id: call_gemini
         run: |
-          # Prepare the prompt
-          PROMPT="You are an expert research analyst. Create a comprehensive, well-structured research report on the topic: \"${{ github.event.inputs.topic }}\". Follow this process: 1. Plan: Internally decompose the topic into 5 key sub-questions. 2. Search & Summarize: Internally search for information on each sub-question. 3. Synthesize Report: Weave all information into a single, coherent report with an Introduction, a section for each key question, and a Conclusion. The final output should ONLY be the report text."
+          # Extract the topic from the event payload
+          TOPIC=$(echo '${{ github.event.client_payload.topic }}' | jq -r '.')
+
+          # Prepare the detailed prompt for the AI
+          PROMPT="You are an expert research analyst. Create a comprehensive, well-structured research report on the topic: \"$TOPIC\". Follow this exact process: 1. Plan: Internally decompose the topic into 5 key sub-questions. 2. Search & Summarize: Internally search for information on each sub-question. 3. Synthesize Report: Weave all information into a single, coherent report with an Introduction, a section for each key question, and a Conclusion. The final output should ONLY be the report text."
           
+          # Use jq to safely create the JSON payload
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" \
             '{contents: [{parts: [{text: $prompt}]}]}')
           
+          # Call the Gemini API using the secret key
           API_RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD")
             
+          # Extract just the text part of the response
           REPORT_TEXT=$(echo "$API_RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
           
-          # Output the report for display in the logs
+          # Print the final report to the logs for the user to see
           echo "--- GENERATED REPORT START ---"
           echo "$REPORT_TEXT"
           echo "--- GENERATED REPORT END ---"
