@@ -14,12 +14,15 @@ jobs:
       - name: Checkout Repository Code
         uses: actions/checkout@v4
 
+      # --- NEW STEP ADDED HERE ---
+      # This step gives our script the necessary permissions to run.
+      - name: Make script executable
+        run: chmod +x .github/entrypoint.sh
+
       - name: Run Research Script
         # Securely pass the secret API key to the script's environment
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         # This simple, single line executes our script.
-        # 'bash' tells the runner to use the bash interpreter.
-        # The second part is the path to the script.
-        # The third part is the topic data, passed as an argument.
-        run: bash .github/entrypoint.sh "${{ github.event.client_payload.topic }}"
+        # It passes the topic data as a command-line argument.
+        run: .github/entrypoint.sh "${{ github.event.client_payload.topic }}"
